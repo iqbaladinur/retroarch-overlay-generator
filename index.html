@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroArch Overlay Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>RetroArch Overlay Generator</h1>
+            <p class="subtitle">Generate custom overlays with real-time preview</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Config Panel -->
+            <div class="config-panel">
+                <div class="panel-scroll">
+                    <!-- Left Column -->
+                    <div class="config-column-left">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Resolution</h2>
+                            </div>
+                            <div class="card-content">
+                                <select id="resolution" class="select">
+                                    <option value="640x480">640 x 480</option>
+                                    <option value="320x240">320 x 240</option>
+                                    <option value="800x600">800 x 600</option>
+                                    <option value="1024x768">1024 x 768</option>
+                                    <option value="1280x720">1280 x 720</option>
+                                    <option value="1920x1080">1920 x 1080</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                                <div id="customResolution" class="custom-resolution">
+                                    <input type="number" id="customWidth" placeholder="Width" min="1" value="640" class="input">
+                                    <span class="separator">×</span>
+                                    <input type="number" id="customHeight" placeholder="Height" min="1" value="480" class="input">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Overlay Type</h2>
+                            </div>
+                            <div class="card-content">
+                                <select id="overlayType" class="select">
+                                    <option value="scanlines">Scanlines</option>
+                                    <option value="dotmatrix">Dot Matrix</option>
+                                    <option value="pixelgrid">Pixel Grid</option>
+                                    <option value="shadowmask">Shadow Mask (CRT)</option>
+                                    <option value="aperturegrille">Aperture Grille (Trinitron)</option>
+                                    <option value="lcdgrid">LCD Grid</option>
+                                    <option value="none">None</option>
+                                </select>
+                            </div>
+                        </div>
+
+                    <div id="scanlinesControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>Scanlines Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Line Height</span>
+                                    <span class="label-value" id="scanlineHeightValue">2px</span>
+                                </label>
+                                <input type="range" id="scanlineHeight" min="0.5" max="20" step="0.5" value="2" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Gap Height</span>
+                                    <span class="label-value" id="scanlineGapValue">2px</span>
+                                </label>
+                                <input type="range" id="scanlineGap" min="0.5" max="20" step="0.5" value="2" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Line Color</label>
+                                <input type="color" id="scanlineColor" value="#000000" class="color-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="scanlineOpacityValue">50%</span>
+                                </label>
+                                <input type="range" id="scanlineOpacity" min="0" max="100" step="0.5" value="50" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dot Matrix Controls -->
+                    <div id="dotmatrixControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>Dot Matrix Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Dot Size</span>
+                                    <span class="label-value" id="dotSizeValue">2px</span>
+                                </label>
+                                <input type="range" id="dotSize" min="0.5" max="20" step="0.5" value="2" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Dot Spacing</span>
+                                    <span class="label-value" id="dotSpacingValue">2px</span>
+                                </label>
+                                <input type="range" id="dotSpacing" min="0.5" max="20" step="0.5" value="2" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Dot Color</label>
+                                <input type="color" id="dotColor" value="#000000" class="color-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="dotOpacityValue">30%</span>
+                                </label>
+                                <input type="range" id="dotOpacity" min="0" max="100" step="0.5" value="30" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pixel Grid Controls -->
+                    <div id="pixelgridControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>Pixel Grid Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Grid Size</span>
+                                    <span class="label-value" id="pixelGridSizeValue">4px</span>
+                                </label>
+                                <input type="range" id="pixelGridSize" min="1" max="32" step="0.5" value="4" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Line Thickness</span>
+                                    <span class="label-value" id="pixelGridThicknessValue">0.5px</span>
+                                </label>
+                                <input type="range" id="pixelGridThickness" min="0.5" max="4" step="0.5" value="0.5" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Grid Color</label>
+                                <input type="color" id="pixelGridColor" value="#000000" class="color-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="pixelGridOpacityValue">30%</span>
+                                </label>
+                                <input type="range" id="pixelGridOpacity" min="0" max="100" step="0.5" value="30" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shadow Mask Controls -->
+                    <div id="shadowmaskControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>Shadow Mask Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Dot Size</span>
+                                    <span class="label-value" id="shadowMaskSizeValue">3px</span>
+                                </label>
+                                <input type="range" id="shadowMaskSize" min="1" max="10" step="0.5" value="3" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Dot Spacing</span>
+                                    <span class="label-value" id="shadowMaskSpacingValue">1px</span>
+                                </label>
+                                <input type="range" id="shadowMaskSpacing" min="0.5" max="8" step="0.5" value="1" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="shadowMaskOpacityValue">40%</span>
+                                </label>
+                                <input type="range" id="shadowMaskOpacity" min="0" max="100" step="0.5" value="40" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aperture Grille Controls -->
+                    <div id="aperturegrilleControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>Aperture Grille Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Line Width</span>
+                                    <span class="label-value" id="grilleWidthValue">2px</span>
+                                </label>
+                                <input type="range" id="grilleWidth" min="0.5" max="8" step="0.5" value="2" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Line Spacing</span>
+                                    <span class="label-value" id="grilleSpacingValue">1px</span>
+                                </label>
+                                <input type="range" id="grilleSpacing" min="0.5" max="8" step="0.5" value="1" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Line Color</label>
+                                <input type="color" id="grilleColor" value="#000000" class="color-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="grilleOpacityValue">35%</span>
+                                </label>
+                                <input type="range" id="grilleOpacity" min="0" max="100" step="0.5" value="35" class="slider">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LCD Grid Controls -->
+                    <div id="lcdgridControls" class="card settings-card">
+                        <div class="card-header">
+                            <h3>LCD Grid Settings</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Cell Size</span>
+                                    <span class="label-value" id="lcdCellSizeValue">5px</span>
+                                </label>
+                                <input type="range" id="lcdCellSize" min="2" max="20" step="0.5" value="5" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Gap Size</span>
+                                    <span class="label-value" id="lcdGapSizeValue">1px</span>
+                                </label>
+                                <input type="range" id="lcdGapSize" min="0.5" max="4" step="0.5" value="1" class="slider">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Grid Color</label>
+                                <input type="color" id="lcdColor" value="#000000" class="color-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">
+                                    <span>Opacity</span>
+                                    <span class="label-value" id="lcdOpacityValue">25%</span>
+                                </label>
+                                <input type="range" id="lcdOpacity" min="0" max="100" step="0.5" value="25" class="slider">
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="config-column-right">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Preview Image</h2>
+                            </div>
+                            <div class="card-content">
+                                <label class="file-upload-label">
+                                    <input type="file" id="previewImage" accept="image/*" class="file-input">
+                                    <span class="file-upload-button">Choose Image</span>
+                                </label>
+                                <button id="clearImage" class="btn-clear" style="display: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Frame (Optional)</h2>
+                                <label class="toggle-wrapper-small">
+                                    <input type="checkbox" id="frameToggle" class="toggle-input">
+                                    <span class="toggle-slider-small"></span>
+                                </label>
+                            </div>
+                            <div id="frameConfig" class="card-content" style="display: none;">
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Top</span>
+                                        <span class="label-value" id="frameTopValue">10px</span>
+                                    </label>
+                                    <input type="range" id="frameTop" min="0" max="200" step="0.5" value="10" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Right</span>
+                                        <span class="label-value" id="frameRightValue">10px</span>
+                                    </label>
+                                    <input type="range" id="frameRight" min="0" max="200" step="0.5" value="10" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Bottom</span>
+                                        <span class="label-value" id="frameBottomValue">10px</span>
+                                    </label>
+                                    <input type="range" id="frameBottom" min="0" max="200" step="0.5" value="10" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Left</span>
+                                        <span class="label-value" id="frameLeftValue">10px</span>
+                                    </label>
+                                    <input type="range" id="frameLeft" min="0" max="200" step="0.5" value="10" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">Frame Color</label>
+                                    <input type="color" id="frameColor" value="#000000" class="color-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Opacity</span>
+                                        <span class="label-value" id="frameOpacityValue">100%</span>
+                                    </label>
+                                    <input type="range" id="frameOpacity" min="0" max="100" step="0.5" value="100" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Shadow Blur</span>
+                                        <span class="label-value" id="frameShadowBlurValue">0px</span>
+                                    </label>
+                                    <input type="range" id="frameShadowBlur" min="0" max="50" step="0.5" value="0" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Shadow X</span>
+                                        <span class="label-value" id="frameShadowXValue">0px</span>
+                                    </label>
+                                    <input type="range" id="frameShadowX" min="-50" max="50" step="0.5" value="0" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Shadow Y</span>
+                                        <span class="label-value" id="frameShadowYValue">0px</span>
+                                    </label>
+                                    <input type="range" id="frameShadowY" min="-50" max="50" step="0.5" value="0" class="slider">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">Shadow Color</label>
+                                    <input type="color" id="frameShadowColor" value="#000000" class="color-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">Logo Position</label>
+                                    <select id="logoPosition" class="select">
+                                        <option value="none">No Logo</option>
+                                        <option value="bottom-center">Bottom Center</option>
+                                        <option value="top-center">Top Center</option>
+                                        <option value="center">Center</option>
+                                        <option value="bottom-left">Bottom Left</option>
+                                        <option value="bottom-right">Bottom Right</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="file-upload-label">
+                                        <input type="file" id="logoImage" accept="image/*" class="file-input">
+                                        <span class="file-upload-button">Choose Logo</span>
+                                    </label>
+                                    <button id="clearLogo" class="btn-clear" style="display: none;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        Clear Logo
+                                    </button>
+                                </div>
+                                <div class="form-group">
+                                    <label class="label">
+                                        <span>Logo Size</span>
+                                        <span class="label-value" id="logoSizeValue">100px</span>
+                                    </label>
+                                    <input type="range" id="logoSize" min="20" max="500" step="1" value="100" class="slider">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Panel -->
+            <div class="preview-panel">
+                <div class="card preview-card">
+                    <div class="card-header">
+                        <div class="preview-header-left">
+                            <h2>Live Preview</h2>
+                            <div id="previewInfo" class="preview-info"></div>
+                        </div>
+                        <div class="preview-header-right">
+                            <label class="toggle-wrapper">
+                                <input type="checkbox" id="overlayToggle" class="toggle-input" checked>
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Overlay</span>
+                            </label>
+                            <button id="downloadBtn" class="btn-download-header">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download PNG
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content preview-content">
+                        <div class="canvas-wrapper">
+                            <canvas id="previewCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
