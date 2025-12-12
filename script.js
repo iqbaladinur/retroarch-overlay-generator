@@ -11,6 +11,8 @@ const imageAspectRatioSelect = document.getElementById('imageAspectRatio');
 const customAspectRatioDiv = document.getElementById('customAspectRatio');
 const customAspectWidthInput = document.getElementById('customAspectWidth');
 const customAspectHeightInput = document.getElementById('customAspectHeight');
+const aspectRatioBaseGroup = document.getElementById('aspectRatioBaseGroup');
+const aspectRatioBaseSelect = document.getElementById('aspectRatioBase');
 const imagePositionSelect = document.getElementById('imagePosition');
 
 // Frame controls
@@ -222,6 +224,7 @@ imageAspectRatioSelect.addEventListener('change', () => {
 });
 customAspectWidthInput.addEventListener('input', updatePreview);
 customAspectHeightInput.addEventListener('input', updatePreview);
+aspectRatioBaseSelect.addEventListener('change', updatePreview);
 imagePositionSelect.addEventListener('change', updatePreview);
 
 // Pixel Grid event listeners
@@ -347,10 +350,19 @@ function handleResolutionChange() {
 }
 
 function handleAspectRatioChange() {
-    if (imageAspectRatioSelect.value === 'custom') {
+    const aspectRatioValue = imageAspectRatioSelect.value;
+
+    if (aspectRatioValue === 'custom') {
         customAspectRatioDiv.classList.add('active');
     } else {
         customAspectRatioDiv.classList.remove('active');
+    }
+
+    // Show aspect ratio base selector only when aspect ratio is selected (not 'none')
+    if (aspectRatioValue !== 'none') {
+        aspectRatioBaseGroup.style.display = 'block';
+    } else {
+        aspectRatioBaseGroup.style.display = 'none';
     }
 }
 
@@ -433,28 +445,43 @@ function updatePreview() {
     if (previewImage) {
         const aspectRatio = getAspectRatio();
         const position = imagePositionSelect.value;
+        const base = aspectRatioBaseSelect.value;
 
         if (aspectRatio === null) {
             // No aspect ratio constraint - scale to fit canvas
             ctx.drawImage(previewImage, 0, 0, resolution.width, resolution.height);
         } else {
-            // Calculate dimensions based on aspect ratio
-            // Max width = resolution width
-            const drawWidth = resolution.width;
-            const drawHeight = drawWidth / aspectRatio;
+            let drawWidth, drawHeight, drawX, drawY;
 
-            // Calculate Y position based on selected position
-            let drawY;
-            if (position === 'top') {
+            if (base === 'width') {
+                // Width-based: width = resolution width, calculate height
+                drawWidth = resolution.width;
+                drawHeight = drawWidth / aspectRatio;
+                drawX = 0;
+
+                // Calculate Y position based on selected position
+                if (position === 'top') {
+                    drawY = 0;
+                } else if (position === 'bottom') {
+                    drawY = resolution.height - drawHeight;
+                } else { // center
+                    drawY = (resolution.height - drawHeight) / 2;
+                }
+            } else {
+                // Height-based: height = resolution height, calculate width
+                drawHeight = resolution.height;
+                drawWidth = drawHeight * aspectRatio;
                 drawY = 0;
-            } else if (position === 'bottom') {
-                drawY = resolution.height - drawHeight;
-            } else { // center
-                drawY = (resolution.height - drawHeight) / 2;
+
+                // Calculate X position based on selected position (horizontal centering)
+                if (position === 'top' || position === 'center' || position === 'bottom') {
+                    // For height-based, always center horizontally
+                    drawX = (resolution.width - drawWidth) / 2;
+                }
             }
 
             // Draw image with aspect ratio constraint
-            ctx.drawImage(previewImage, 0, drawY, drawWidth, drawHeight);
+            ctx.drawImage(previewImage, drawX, drawY, drawWidth, drawHeight);
         }
     }
 
@@ -564,33 +591,30 @@ function drawLogo(resolution) {
         drawWidth = logoSize * aspectRatio;
     }
 
-    // Calculate position
+    // Calculate position - logo overlaps with frame (positioned from canvas edges)
     let x, y;
-    const frameTop = parseFloat(frameTopInput.value);
-    const frameBottom = parseFloat(frameBottomInput.value);
-    const frameLeft = parseFloat(frameLeftInput.value);
-    const frameRight = parseFloat(frameRightInput.value);
+    const margin = 10; // Margin from canvas edge
 
     switch (position) {
         case 'bottom-center':
             x = (resolution.width - drawWidth) / 2;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            y = resolution.height - drawHeight - margin;
             break;
         case 'top-center':
             x = (resolution.width - drawWidth) / 2;
-            y = frameTop + 10;
+            y = margin;
             break;
         case 'center':
             x = (resolution.width - drawWidth) / 2;
             y = (resolution.height - drawHeight) / 2;
             break;
         case 'bottom-left':
-            x = frameLeft + 10;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            x = margin;
+            y = resolution.height - drawHeight - margin;
             break;
         case 'bottom-right':
-            x = resolution.width - frameRight - drawWidth - 10;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            x = resolution.width - drawWidth - margin;
+            y = resolution.height - drawHeight - margin;
             break;
     }
 
@@ -890,32 +914,30 @@ function drawLogoOnCanvas(context, resolution) {
         drawWidth = logoSize * aspectRatio;
     }
 
+    // Calculate position - logo overlaps with frame (positioned from canvas edges)
     let x, y;
-    const frameTop = parseFloat(frameTopInput.value);
-    const frameBottom = parseFloat(frameBottomInput.value);
-    const frameLeft = parseFloat(frameLeftInput.value);
-    const frameRight = parseFloat(frameRightInput.value);
+    const margin = 10; // Margin from canvas edge
 
     switch (position) {
         case 'bottom-center':
             x = (resolution.width - drawWidth) / 2;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            y = resolution.height - drawHeight - margin;
             break;
         case 'top-center':
             x = (resolution.width - drawWidth) / 2;
-            y = frameTop + 10;
+            y = margin;
             break;
         case 'center':
             x = (resolution.width - drawWidth) / 2;
             y = (resolution.height - drawHeight) / 2;
             break;
         case 'bottom-left':
-            x = frameLeft + 10;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            x = margin;
+            y = resolution.height - drawHeight - margin;
             break;
         case 'bottom-right':
-            x = resolution.width - frameRight - drawWidth - 10;
-            y = resolution.height - frameBottom - drawHeight - 10;
+            x = resolution.width - drawWidth - margin;
+            y = resolution.height - drawHeight - margin;
             break;
     }
 
