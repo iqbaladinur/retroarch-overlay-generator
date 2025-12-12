@@ -224,7 +224,10 @@ imageAspectRatioSelect.addEventListener('change', () => {
 });
 customAspectWidthInput.addEventListener('input', updatePreview);
 customAspectHeightInput.addEventListener('input', updatePreview);
-aspectRatioBaseSelect.addEventListener('change', updatePreview);
+aspectRatioBaseSelect.addEventListener('change', () => {
+    updateImagePositionOptions();
+    updatePreview();
+});
 imagePositionSelect.addEventListener('change', updatePreview);
 
 // Pixel Grid event listeners
@@ -361,8 +364,40 @@ function handleAspectRatioChange() {
     // Show aspect ratio base selector only when aspect ratio is selected (not 'none')
     if (aspectRatioValue !== 'none') {
         aspectRatioBaseGroup.style.display = 'block';
+        updateImagePositionOptions();
     } else {
         aspectRatioBaseGroup.style.display = 'none';
+    }
+}
+
+function updateImagePositionOptions() {
+    const base = aspectRatioBaseSelect.value;
+    const currentValue = imagePositionSelect.value;
+
+    // Clear current options
+    imagePositionSelect.innerHTML = '';
+
+    if (base === 'width') {
+        // Width-based: show vertical positions
+        imagePositionSelect.innerHTML = `
+            <option value="center">Center (Vertical)</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+        `;
+    } else {
+        // Height-based: show horizontal positions
+        imagePositionSelect.innerHTML = `
+            <option value="center">Center (Horizontal)</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+        `;
+    }
+
+    // Try to preserve selection if possible, otherwise default to center
+    if (currentValue === 'center' || imagePositionSelect.querySelector(`option[value="${currentValue}"]`)) {
+        imagePositionSelect.value = currentValue;
+    } else {
+        imagePositionSelect.value = 'center';
     }
 }
 
@@ -473,9 +508,12 @@ function updatePreview() {
                 drawWidth = drawHeight * aspectRatio;
                 drawY = 0;
 
-                // Calculate X position based on selected position (horizontal centering)
-                if (position === 'top' || position === 'center' || position === 'bottom') {
-                    // For height-based, always center horizontally
+                // Calculate X position based on selected position (horizontal positioning)
+                if (position === 'left') {
+                    drawX = 0;
+                } else if (position === 'right') {
+                    drawX = resolution.width - drawWidth;
+                } else { // center
                     drawX = (resolution.width - drawWidth) / 2;
                 }
             }
@@ -1087,4 +1125,5 @@ function generateLCDGridOnCanvas(context, resolution) {
 // Initialize
 handleOverlayTypeChange();
 handleAspectRatioChange();
+updateImagePositionOptions();
 updatePreview();
