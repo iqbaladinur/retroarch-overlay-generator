@@ -260,14 +260,41 @@
                             <h2>Preview Image</h2>
                         </div>
                         <div class="card-content">
-                            <label class="file-upload-label">
-                                <input type="file" id="previewImage" accept="image/*" class="file-input">
-                                <span class="file-upload-button">Choose Image</span>
-                            </label>
-                            <button id="clearImage" class="btn-clear" style="display: none;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                Clear
-                            </button>
+                            <div class="form-group">
+                                <label class="file-upload-label">
+                                    <input type="file" id="previewImage" accept="image/*" class="file-input">
+                                    <span class="file-upload-button">Choose Image</span>
+                                </label>
+                                <button id="clearImage" class="btn-clear" style="display: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    Clear
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Aspect Ratio</label>
+                                <select id="imageAspectRatio" class="select">
+                                    <option value="none">None (Original)</option>
+                                    <option value="16:9">16:9</option>
+                                    <option value="4:3">4:3</option>
+                                    <option value="3:2">3:2</option>
+                                    <option value="1:1">1:1 (Square)</option>
+                                    <option value="21:9">21:9 (Ultrawide)</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                            <div id="customAspectRatio" class="custom-resolution">
+                                <input type="number" id="customAspectWidth" placeholder="Width" min="1" value="16" class="input">
+                                <span class="separator">:</span>
+                                <input type="number" id="customAspectHeight" placeholder="Height" min="1" value="9" class="input">
+                            </div>
+                            <div class="form-group">
+                                <label class="label">Image Position</label>
+                                <select id="imagePosition" class="select">
+                                    <option value="center">Center (Vertical)</option>
+                                    <option value="top">Top</option>
+                                    <option value="bottom">Bottom</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     </div>

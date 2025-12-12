@@ -7,6 +7,11 @@ const overlayTypeSelect = document.getElementById('overlayType');
 const previewImageInput = document.getElementById('previewImage');
 const clearImageBtn = document.getElementById('clearImage');
 const overlayToggle = document.getElementById('overlayToggle');
+const imageAspectRatioSelect = document.getElementById('imageAspectRatio');
+const customAspectRatioDiv = document.getElementById('customAspectRatio');
+const customAspectWidthInput = document.getElementById('customAspectWidth');
+const customAspectHeightInput = document.getElementById('customAspectHeight');
+const imagePositionSelect = document.getElementById('imagePosition');
 
 // Frame controls
 const frameToggle = document.getElementById('frameToggle');
@@ -210,6 +215,15 @@ clearImageBtn.addEventListener('click', clearPreviewImage);
 // Overlay toggle event listener
 overlayToggle.addEventListener('change', updatePreview);
 
+// Image aspect ratio event listeners
+imageAspectRatioSelect.addEventListener('change', () => {
+    handleAspectRatioChange();
+    updatePreview();
+});
+customAspectWidthInput.addEventListener('input', updatePreview);
+customAspectHeightInput.addEventListener('input', updatePreview);
+imagePositionSelect.addEventListener('change', updatePreview);
+
 // Pixel Grid event listeners
 pixelGridSizeInput.addEventListener('input', () => {
     pixelGridSizeValue.textContent = formatValue(pixelGridSizeInput.value) + 'px';
@@ -332,6 +346,14 @@ function handleResolutionChange() {
     }
 }
 
+function handleAspectRatioChange() {
+    if (imageAspectRatioSelect.value === 'custom') {
+        customAspectRatioDiv.classList.add('active');
+    } else {
+        customAspectRatioDiv.classList.remove('active');
+    }
+}
+
 function handleOverlayTypeChange() {
     const overlayType = overlayTypeSelect.value;
 
@@ -381,6 +403,21 @@ function getResolution() {
     }
 }
 
+function getAspectRatio() {
+    const aspectRatioValue = imageAspectRatioSelect.value;
+
+    if (aspectRatioValue === 'none') {
+        return null;
+    } else if (aspectRatioValue === 'custom') {
+        const w = parseInt(customAspectWidthInput.value) || 16;
+        const h = parseInt(customAspectHeightInput.value) || 9;
+        return w / h;
+    } else {
+        const [w, h] = aspectRatioValue.split(':').map(Number);
+        return w / h;
+    }
+}
+
 function updatePreview() {
     const resolution = getResolution();
     const overlayType = overlayTypeSelect.value;
@@ -394,8 +431,31 @@ function updatePreview() {
 
     // Draw preview image if exists
     if (previewImage) {
-        // Draw image scaled to fit canvas
-        ctx.drawImage(previewImage, 0, 0, resolution.width, resolution.height);
+        const aspectRatio = getAspectRatio();
+        const position = imagePositionSelect.value;
+
+        if (aspectRatio === null) {
+            // No aspect ratio constraint - scale to fit canvas
+            ctx.drawImage(previewImage, 0, 0, resolution.width, resolution.height);
+        } else {
+            // Calculate dimensions based on aspect ratio
+            // Max width = resolution width
+            const drawWidth = resolution.width;
+            const drawHeight = drawWidth / aspectRatio;
+
+            // Calculate Y position based on selected position
+            let drawY;
+            if (position === 'top') {
+                drawY = 0;
+            } else if (position === 'bottom') {
+                drawY = resolution.height - drawHeight;
+            } else { // center
+                drawY = (resolution.height - drawHeight) / 2;
+            }
+
+            // Draw image with aspect ratio constraint
+            ctx.drawImage(previewImage, 0, drawY, drawWidth, drawHeight);
+        }
     }
 
     // Draw overlay on top only if toggle is on
@@ -1004,4 +1064,5 @@ function generateLCDGridOnCanvas(context, resolution) {
 
 // Initialize
 handleOverlayTypeChange();
+handleAspectRatioChange();
 updatePreview();
