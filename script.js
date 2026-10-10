@@ -44,11 +44,10 @@ const frameShadowXValue = document.getElementById('frameShadowXValue');
 const frameShadowYInput = document.getElementById('frameShadowY');
 const frameShadowYValue = document.getElementById('frameShadowYValue');
 const frameShadowColorInput = document.getElementById('frameShadowColor');
-const logoPositionSelect = document.getElementById('logoPosition');
-const logoImageInput = document.getElementById('logoImage');
-const clearLogoBtn = document.getElementById('clearLogo');
-const logoSizeInput = document.getElementById('logoSize');
-const logoSizeValue = document.getElementById('logoSizeValue');
+const logoFilesInput = document.getElementById('logoFiles');
+const logoList = document.getElementById('logoList');
+const logoCount = document.getElementById('logoCount');
+const logoHint = document.getElementById('logoHint');
 
 // Scanlines controls
 const scanlinesControls = document.getElementById('scanlinesControls');
@@ -119,7 +118,20 @@ const previewInfo = document.getElementById('previewInfo');
 
 // Preview image state
 let previewImage = null;
-let logoImage = null;
+
+// Logos: free-positioned screen-space art. x/y are the logo CENTRE in
+// normalised canvas coordinates (0..1), so they survive resolution changes.
+let logos = [];
+let selectedLogoId = null;
+let nextLogoId = 1;
+let dragState = null;
+
+// Pointer hit/visual sizes, expressed in CSS pixels so they stay constant
+// regardless of how large the canvas actually is.
+const LOGO_HANDLE_SIZE_CSS = 11;
+const LOGO_HANDLE_HIT_CSS = 9;
+const LOGO_MIN_SIZE = 8;
+const LOGO_MAX_SIZE = 2000;
 
 // Integer scaling modes and axes, mirroring RetroArch's video settings
 // (gfx/video_defines.h: video_scale_integer_scaling / video_scale_integer_axis).
@@ -190,15 +202,10 @@ frameShadowYInput.addEventListener('input', () => {
     updatePreview();
 });
 frameShadowColorInput.addEventListener('input', updatePreview);
-logoPositionSelect.addEventListener('change', updatePreview);
-logoSizeInput.addEventListener('input', () => {
-    logoSizeValue.textContent = formatValue(logoSizeInput.value) + 'px';
-    updatePreview();
-});
-
-// Logo upload event listeners
-logoImageInput.addEventListener('change', handleLogoUpload);
-clearLogoBtn.addEventListener('click', clearLogo);
+// Logo event listeners
+logoFilesInput.addEventListener('change', handleLogoFiles);
+logoList.addEventListener('click', handleLogoListClick);
+logoList.addEventListener('input', handleLogoListInput);
 
 // Scanlines event listeners
 scanlineHeightInput.addEventListener('input', () => {
@@ -364,29 +371,435 @@ function clearPreviewImage() {
     updatePreview();
 }
 
-function handleLogoUpload(event) {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                logoImage = img;
-                clearLogoBtn.style.display = 'inline-flex';
-                updatePreview();
-            };
-            img.src = e.target.result;
+// ---------------------------------------------------------------------------
+// Logos (multiple, free positioned, draggable on the canvas)
+// ---------------------------------------------------------------------------
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function getSelectedLogo() {
+    return logos.find((logo) => logo.id === selectedLogoId) || null;
+}
+
+// Canvas pixels per CSS pixel, so handles and hit boxes keep a constant
+// on-screen size for any canvas resolution and zoom level.
+function getUiScale() {
+    const rect = canvas.getBoundingClientRect();
+    return rect.width > 0 ? canvas.width / rect.width : 1;
+}
+
+function getCanvasPoint(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (event.clientX - rect.left) * (rect.width > 0 ? canvas.width / rect.width : 1),
+        y: (event.clientY - rect.top) * (rect.height > 0 ? canvas.height / rect.height : 1)
+    };
+}
+
+function getLogoDims(logo) {
+    const aspect = logo.image.naturalWidth / logo.image.naturalHeight;
+    return aspect > 1
+        ? { width: logo.size, height: logo.size / aspect }
+        : { width: logo.size * aspect, height: logo.size };
+}
+
+function getLogoRect(logo, resolution) {
+    const dims = getLogoDims(logo);
+    return {
+        x: logo.x * resolution.width - dims.width / 2,
+        y: logo.y * resolution.height - dims.height / 2,
+        width: dims.width,
+        height: dims.height
+    };
+}
+
+function getLogoCenter(logo, resolution) {
+    return { x: logo.x * resolution.width, y: logo.y * resolution.height };
+}
+
+function hitTestLogo(point, resolution, padding) {
+    // Top-most first: the last drawn logo wins.
+    for (let i = logos.length - 1; i >= 0; i--) {
+        const logo = logos[i];
+        if (!logo.visible) {
+            continue;
+        }
+        const rect = getLogoRect(logo, resolution);
+        if (point.x >= rect.x - padding && point.x <= rect.x + rect.width + padding &&
+            point.y >= rect.y - padding && point.y <= rect.y + rect.height + padding) {
+            return logo;
+        }
+    }
+    return null;
+}
+
+function handleLogoFiles(event) {
+    const files = Array.from(event.target.files || []);
+    files.filter((file) => file.type.startsWith('image/')).forEach(addLogoFromFile);
+    // Allow re-adding the same file later.
+    event.target.value = '';
+}
+
+function addLogoFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            // Start at the logo's natural size, but keep it sane on screen.
+            const natural = Math.min(img.naturalWidth, img.naturalHeight);
+            const index = logos.length;
+
+            logos.push({
+                id: nextLogoId++,
+                name: file.name || 'logo',
+                image: img,
+                size: clamp(natural, 24, 160),
+                // Cascade so multiple logos don't land exactly on top of each other.
+                x: clamp(0.5 + index * 0.05, 0.05, 0.95),
+                y: clamp(0.5 + index * 0.05, 0.05, 0.95),
+                visible: true
+            });
+
+            selectedLogoId = logos[logos.length - 1].id;
+            renderLogoList();
+            updatePreview();
         };
-        reader.readAsDataURL(file);
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeLogo(id) {
+    logos = logos.filter((logo) => logo.id !== id);
+    if (selectedLogoId === id) {
+        selectedLogoId = null;
+    }
+    renderLogoList();
+    updatePreview();
+}
+
+// Clicking a logo on the canvas lifts it above the others, like a design tool.
+function selectLogo(id, bringToFront) {
+    selectedLogoId = id;
+
+    if (bringToFront) {
+        const index = logos.findIndex((logo) => logo.id === id);
+        if (index >= 0 && index !== logos.length - 1) {
+            logos.push(logos.splice(index, 1)[0]);
+        }
+    }
+
+    renderLogoList();
+}
+
+function renderLogoList() {
+    logoList.innerHTML = '';
+    logoCount.textContent = logos.length === 1 ? '1 logo' : `${logos.length} logos`;
+    logoHint.style.display = logos.length ? 'block' : 'none';
+
+    logos.forEach((logo) => {
+        const item = document.createElement('div');
+        item.className = 'logo-item' + (logo.id === selectedLogoId ? ' active' : '');
+        item.dataset.logoId = String(logo.id);
+
+        const thumb = document.createElement('img');
+        thumb.className = 'logo-thumb';
+        thumb.src = logo.image.src;
+        thumb.alt = '';
+
+        const body = document.createElement('div');
+        body.className = 'logo-item-body';
+
+        const name = document.createElement('div');
+        name.className = 'logo-item-name';
+        const nameText = document.createElement('span');
+        nameText.textContent = logo.name;
+        const sizeText = document.createElement('span');
+        sizeText.className = 'label-value';
+        sizeText.dataset.role = 'size';
+        sizeText.textContent = `${Math.round(logo.size)}px`;
+        name.appendChild(nameText);
+        name.appendChild(sizeText);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.className = 'slider logo-size';
+        slider.min = String(LOGO_MIN_SIZE);
+        slider.max = String(LOGO_MAX_SIZE);
+        slider.step = '1';
+        slider.value = String(Math.round(logo.size));
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'logo-remove';
+        remove.title = 'Remove logo';
+        remove.textContent = '×';
+
+        body.appendChild(name);
+        body.appendChild(slider);
+        item.appendChild(thumb);
+        item.appendChild(body);
+        item.appendChild(remove);
+        logoList.appendChild(item);
+    });
+}
+
+function handleLogoListClick(event) {
+    const item = event.target.closest('.logo-item');
+    if (!item) {
+        return;
+    }
+
+    const id = Number(item.dataset.logoId);
+
+    if (event.target.closest('.logo-remove')) {
+        removeLogo(id);
+        return;
+    }
+
+    selectLogo(id, false);
+    updatePreview();
+}
+
+function handleLogoListInput(event) {
+    if (!event.target.classList.contains('logo-size')) {
+        return;
+    }
+
+    const item = event.target.closest('.logo-item');
+    const logo = logos.find((entry) => entry.id === Number(item.dataset.logoId));
+    if (!logo) {
+        return;
+    }
+
+    logo.size = clamp(parseFloat(event.target.value), LOGO_MIN_SIZE, LOGO_MAX_SIZE);
+    selectedLogoId = logo.id;
+    syncLogoListSize(logo);
+    updatePreview();
+}
+
+// Update just the size readout while dragging the resize handle, so the slider
+// tracks the pointer without rebuilding the whole list on every frame.
+function syncLogoListSize(logo) {
+    const item = logoList.querySelector(`.logo-item[data-logo-id="${logo.id}"]`);
+    if (!item) {
+        return;
+    }
+
+    const value = Math.round(logo.size);
+    const label = item.querySelector('[data-role="size"]');
+    const slider = item.querySelector('.logo-size');
+
+    if (label) {
+        label.textContent = `${value}px`;
+    }
+    if (slider) {
+        slider.max = String(LOGO_MAX_SIZE);
+        slider.value = String(value);
     }
 }
 
-function clearLogo() {
-    logoImage = null;
-    logoImageInput.value = '';
-    clearLogoBtn.style.display = 'none';
+function drawLogos(context, resolution) {
+    logos.forEach((logo) => {
+        if (!logo.visible) {
+            return;
+        }
+        const rect = getLogoRect(logo, resolution);
+        context.drawImage(logo.image, rect.x, rect.y, rect.width, rect.height);
+    });
+}
+
+// Preview-only: dashed bounds + resize handle for the selected logo. Never
+// drawn on the exported overlay.
+function drawLogoSelection(resolution) {
+    const logo = getSelectedLogo();
+    if (!logo) {
+        return;
+    }
+
+    const rect = getLogoRect(logo, resolution);
+    const ui = getUiScale();
+    const lineWidth = Math.max(1, Math.round(1.5 * ui));
+    const handle = Math.max(6, Math.round(LOGO_HANDLE_SIZE_CSS * ui));
+
+    ctx.save();
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash([6 * ui, 4 * ui]);
+    ctx.strokeRect(rect.x - lineWidth / 2, rect.y - lineWidth / 2,
+                   rect.width + lineWidth, rect.height + lineWidth);
+    ctx.setLineDash([]);
+
+    const handleX = rect.x + rect.width - handle / 2;
+    const handleY = rect.y + rect.height - handle / 2;
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(handleX, handleY, handle, handle);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1, ui);
+    ctx.strokeRect(handleX, handleY, handle, handle);
+    ctx.restore();
+}
+
+function isHandleHit(point, resolution) {
+    const logo = getSelectedLogo();
+    if (!logo) {
+        return false;
+    }
+
+    const rect = getLogoRect(logo, resolution);
+    const reach = LOGO_HANDLE_HIT_CSS * getUiScale();
+
+    return Math.abs(point.x - (rect.x + rect.width)) <= reach &&
+           Math.abs(point.y - (rect.y + rect.height)) <= reach;
+}
+
+canvas.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+    }
+
+    const resolution = getResolution();
+    const point = getCanvasPoint(event);
+
+    if (isHandleHit(point, resolution)) {
+        const logo = getSelectedLogo();
+        const center = getLogoCenter(logo, resolution);
+        dragState = {
+            mode: 'resize',
+            id: logo.id,
+            startSize: logo.size,
+            startDistance: Math.max(1, Math.hypot(point.x - center.x, point.y - center.y))
+        };
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add('dragging');
+        event.preventDefault();
+        return;
+    }
+
+    const hit = hitTestLogo(point, resolution, 0);
+    if (hit) {
+        selectLogo(hit.id, true);
+        const center = getLogoCenter(hit, resolution);
+        dragState = {
+            mode: 'move',
+            id: hit.id,
+            offsetX: point.x - center.x,
+            offsetY: point.y - center.y
+        };
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add('dragging');
+        updatePreview();
+        event.preventDefault();
+        return;
+    }
+
+    if (selectedLogoId !== null) {
+        selectedLogoId = null;
+        renderLogoList();
+        updatePreview();
+    }
+});
+
+canvas.addEventListener('pointermove', (event) => {
+    const resolution = getResolution();
+    const point = getCanvasPoint(event);
+
+    if (dragState) {
+        const logo = logos.find((entry) => entry.id === dragState.id);
+        if (!logo) {
+            return;
+        }
+
+        if (dragState.mode === 'move') {
+            logo.x = clamp((point.x - dragState.offsetX) / resolution.width, 0, 1);
+            logo.y = clamp((point.y - dragState.offsetY) / resolution.height, 0, 1);
+        } else {
+            const center = getLogoCenter(logo, resolution);
+            const distance = Math.hypot(point.x - center.x, point.y - center.y);
+            logo.size = clamp(dragState.startSize * (distance / dragState.startDistance),
+                              LOGO_MIN_SIZE, LOGO_MAX_SIZE);
+            syncLogoListSize(logo);
+        }
+
+        updatePreview();
+        return;
+    }
+
+    let cursor = '';
+    if (isHandleHit(point, resolution)) {
+        cursor = 'nwse-resize';
+    } else if (hitTestLogo(point, resolution, 0)) {
+        cursor = 'grab';
+    }
+    canvas.style.cursor = cursor;
+});
+
+function endDrag(event) {
+    if (!dragState) {
+        return;
+    }
+
+    if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+    }
+
+    dragState = null;
+    canvas.classList.remove('dragging');
+    renderLogoList();
     updatePreview();
 }
+
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+canvas.addEventListener('pointerleave', () => {
+    if (!dragState) {
+        canvas.style.cursor = '';
+    }
+});
+
+document.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' ||
+                   target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+    }
+
+    const logo = getSelectedLogo();
+    if (!logo) {
+        return;
+    }
+
+    const resolution = getResolution();
+    const step = event.shiftKey ? 10 : 1;
+
+    switch (event.key) {
+        case 'ArrowLeft':
+            logo.x = clamp(logo.x - step / resolution.width, 0, 1);
+            break;
+        case 'ArrowRight':
+            logo.x = clamp(logo.x + step / resolution.width, 0, 1);
+            break;
+        case 'ArrowUp':
+            logo.y = clamp(logo.y - step / resolution.height, 0, 1);
+            break;
+        case 'ArrowDown':
+            logo.y = clamp(logo.y + step / resolution.height, 0, 1);
+            break;
+        case 'Delete':
+        case 'Backspace':
+            removeLogo(logo.id);
+            event.preventDefault();
+            return;
+        default:
+            return;
+    }
+
+    event.preventDefault();
+    updatePreview();
+});
 
 function handleResolutionChange() {
     if (resolutionSelect.value === 'custom') {
@@ -956,9 +1369,10 @@ function updatePreview() {
         generateFrame(resolution);
     }
 
-    // Draw logo if exists and position is not 'none'
-    if (logoImage && logoPositionSelect.value !== 'none') {
-        drawLogo(resolution);
+    // Draw logos (screen-space art), then the selection handles on top
+    if (logos.length) {
+        drawLogos(ctx, resolution);
+        drawLogoSelection(resolution);
     }
 
     const hintText = getIntegerHint(scalingInfo);
@@ -1019,52 +1433,6 @@ function generateFrame(resolution) {
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-}
-
-function drawLogo(resolution) {
-    const position = logoPositionSelect.value;
-    const logoSize = parseFloat(logoSizeInput.value);
-
-    // Calculate logo dimensions maintaining aspect ratio
-    const aspectRatio = logoImage.width / logoImage.height;
-    let drawWidth, drawHeight;
-
-    if (aspectRatio > 1) {
-        drawWidth = logoSize;
-        drawHeight = logoSize / aspectRatio;
-    } else {
-        drawHeight = logoSize;
-        drawWidth = logoSize * aspectRatio;
-    }
-
-    // Calculate position - logo overlaps with frame (positioned from canvas edges)
-    let x, y;
-    const margin = 10; // Margin from canvas edge
-
-    switch (position) {
-        case 'bottom-center':
-            x = (resolution.width - drawWidth) / 2;
-            y = resolution.height - drawHeight - margin;
-            break;
-        case 'top-center':
-            x = (resolution.width - drawWidth) / 2;
-            y = margin;
-            break;
-        case 'center':
-            x = (resolution.width - drawWidth) / 2;
-            y = (resolution.height - drawHeight) / 2;
-            break;
-        case 'bottom-left':
-            x = margin;
-            y = resolution.height - drawHeight - margin;
-            break;
-        case 'bottom-right':
-            x = resolution.width - drawWidth - margin;
-            y = resolution.height - drawHeight - margin;
-            break;
-    }
-
-    ctx.drawImage(logoImage, x, y, drawWidth, drawHeight);
 }
 
 function generateScanlines(resolution) {
@@ -1403,9 +1771,9 @@ function downloadOverlay() {
         generateFrameOnCanvas(downloadCtx, resolution);
     }
 
-    // Draw logo if exists
-    if (logoImage && logoPositionSelect.value !== 'none') {
-        drawLogoOnCanvas(downloadCtx, resolution);
+    // Draw logos (screen-space art, no selection handles in the export)
+    if (logos.length) {
+        drawLogos(downloadCtx, resolution);
     }
 
     // Download the overlay
@@ -1455,51 +1823,6 @@ function generateFrameOnCanvas(context, resolution) {
     context.shadowBlur = 0;
     context.shadowOffsetX = 0;
     context.shadowOffsetY = 0;
-}
-
-function drawLogoOnCanvas(context, resolution) {
-    const position = logoPositionSelect.value;
-    const logoSize = parseFloat(logoSizeInput.value);
-
-    const aspectRatio = logoImage.width / logoImage.height;
-    let drawWidth, drawHeight;
-
-    if (aspectRatio > 1) {
-        drawWidth = logoSize;
-        drawHeight = logoSize / aspectRatio;
-    } else {
-        drawHeight = logoSize;
-        drawWidth = logoSize * aspectRatio;
-    }
-
-    // Calculate position - logo overlaps with frame (positioned from canvas edges)
-    let x, y;
-    const margin = 10; // Margin from canvas edge
-
-    switch (position) {
-        case 'bottom-center':
-            x = (resolution.width - drawWidth) / 2;
-            y = resolution.height - drawHeight - margin;
-            break;
-        case 'top-center':
-            x = (resolution.width - drawWidth) / 2;
-            y = margin;
-            break;
-        case 'center':
-            x = (resolution.width - drawWidth) / 2;
-            y = (resolution.height - drawHeight) / 2;
-            break;
-        case 'bottom-left':
-            x = margin;
-            y = resolution.height - drawHeight - margin;
-            break;
-        case 'bottom-right':
-            x = resolution.width - drawWidth - margin;
-            y = resolution.height - drawHeight - margin;
-            break;
-    }
-
-    context.drawImage(logoImage, x, y, drawWidth, drawHeight);
 }
 
 function generateScanlinesOnCanvas(context, resolution) {
@@ -1647,4 +1970,5 @@ handleOverlayTypeChange();
 handleScalingModeChange();
 handleAspectRatioChange();
 updateImagePositionOptions();
+renderLogoList();
 updatePreview();

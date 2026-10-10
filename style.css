@@ -240,6 +240,102 @@ body {
     image-rendering: crisp-edges;
 }
 
+/* --- Logos panel ------------------------------------------------------- */
+
+.logo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.logo-list:empty {
+    display: none;
+}
+
+.logo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    background-color: hsl(var(--background));
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.logo-item:hover {
+    background-color: hsl(var(--accent));
+}
+
+.logo-item.active {
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsla(var(--ring), 0.15);
+}
+
+.logo-thumb {
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    object-fit: contain;
+    border-radius: calc(var(--radius) - 4px);
+    background-color: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+}
+
+.logo-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.logo-item-name {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.375rem;
+    font-size: 0.625rem;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.125rem;
+}
+
+.logo-item-name > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logo-item .slider {
+    height: 0.1875rem;
+}
+
+.logo-remove {
+    flex: 0 0 auto;
+    width: 1.375rem;
+    height: 1.375rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 4px);
+    background-color: hsl(var(--background));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    transition: all 0.2s;
+}
+
+.logo-remove:hover {
+    color: hsl(var(--destructive));
+    border-color: hsl(var(--destructive));
+}
+
+#previewCanvas.dragging {
+    cursor: grabbing;
+}
+
 .color-input {
     width: 100%;
     height: 1.75rem;

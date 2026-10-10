@@ -443,33 +443,25 @@
                                     <label class="label">Shadow Color</label>
                                     <input type="color" id="frameShadowColor" value="#000000" class="color-input">
                                 </div>
-                                <div class="form-group">
-                                    <label class="label">Logo Position</label>
-                                    <select id="logoPosition" class="select">
-                                        <option value="none">No Logo</option>
-                                        <option value="bottom-center">Bottom Center</option>
-                                        <option value="top-center">Top Center</option>
-                                        <option value="center">Center</option>
-                                        <option value="bottom-left">Bottom Left</option>
-                                        <option value="bottom-right">Bottom Right</option>
-                                    </select>
-                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Logos</h2>
+                                <span class="label-value" id="logoCount">0</span>
+                            </div>
+                            <div class="card-content">
                                 <div class="form-group">
                                     <label class="file-upload-label">
-                                        <input type="file" id="logoImage" accept="image/*" class="file-input">
-                                        <span class="file-upload-button">Choose Logo</span>
+                                        <input type="file" id="logoFiles" accept="image/*" multiple class="file-input">
+                                        <span class="file-upload-button">Add Logo(s)</span>
                                     </label>
-                                    <button id="clearLogo" class="btn-clear" style="display: none;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                        Clear Logo
-                                    </button>
                                 </div>
-                                <div class="form-group">
-                                    <label class="label">
-                                        <span>Logo Size</span>
-                                        <span class="label-value" id="logoSizeValue">100px</span>
-                                    </label>
-                                    <input type="range" id="logoSize" min="20" max="500" step="1" value="100" class="slider">
+                                <div id="logoList" class="logo-list"></div>
+                                <div class="field-hint" id="logoHint">
+                                    Drag logo-nya di canvas buat pindahin. Handle di sudut kanan-bawah buat resize.
+                                    Arrow keys geser 1px (Shift = 10px), Delete buat hapus.
                                 </div>
                             </div>
                         </div>
