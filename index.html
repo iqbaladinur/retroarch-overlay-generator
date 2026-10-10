@@ -295,6 +295,35 @@
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label class="label">Scaling Mode</label>
+                                <select id="imageScalingMode" class="select">
+                                    <option value="fit">Fit (Non-Integer)</option>
+                                    <option value="integer-underscale">Integer · Underscale</option>
+                                    <option value="integer-overscale">Integer · Overscale</option>
+                                    <option value="integer-smart">Integer · Smart</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="integerAxisGroup" style="display: none;">
+                                <label class="label">Integer Scale Axis</label>
+                                <select id="integerScaleAxis" class="select">
+                                    <option value="y">Y — Height</option>
+                                    <option value="yx">Y + X — Height &amp; Width</option>
+                                    <option value="x">X — Width</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="contentSizeGroup" style="display: none;">
+                                <label class="label">
+                                    <span>Source Content Size</span>
+                                    <span class="label-value" id="contentSizeValue">auto</span>
+                                </label>
+                                <div class="custom-resolution active">
+                                    <input type="number" id="contentSourceWidth" placeholder="Width" min="1" class="input">
+                                    <span class="separator">×</span>
+                                    <input type="number" id="contentSourceHeight" placeholder="Height" min="1" class="input">
+                                </div>
+                                <div class="field-hint">Native resolution of the game image. Leave empty to use the uploaded image size.</div>
+                            </div>
+                            <div class="form-group">
                                 <label class="label">Image Position</label>
                                 <select id="imagePosition" class="select">
                                     <option value="center">Center (Vertical)</option>

@@ -228,6 +228,18 @@ body {
     color: hsl(var(--muted-foreground));
 }
 
+.field-hint {
+    font-size: 0.625rem;
+    line-height: 1.35;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.25rem;
+}
+
+#previewCanvas.pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
 .color-input {
     width: 100%;
     height: 1.75rem;

@@ -14,6 +14,13 @@ const customAspectHeightInput = document.getElementById('customAspectHeight');
 const aspectRatioBaseGroup = document.getElementById('aspectRatioBaseGroup');
 const aspectRatioBaseSelect = document.getElementById('aspectRatioBase');
 const imagePositionSelect = document.getElementById('imagePosition');
+const imageScalingModeSelect = document.getElementById('imageScalingMode');
+const integerAxisGroup = document.getElementById('integerAxisGroup');
+const integerScaleAxisSelect = document.getElementById('integerScaleAxis');
+const contentSizeGroup = document.getElementById('contentSizeGroup');
+const contentSizeValue = document.getElementById('contentSizeValue');
+const contentSourceWidthInput = document.getElementById('contentSourceWidth');
+const contentSourceHeightInput = document.getElementById('contentSourceHeight');
 
 // Frame controls
 const frameToggle = document.getElementById('frameToggle');
@@ -112,6 +119,18 @@ const previewInfo = document.getElementById('previewInfo');
 // Preview image state
 let previewImage = null;
 let logoImage = null;
+
+// Integer scaling modes and axes, mirroring RetroArch's video settings
+// (gfx/video_defines.h: video_scale_integer_scaling / video_scale_integer_axis).
+// The half-step axes (Y + X.5, Y.5 + X.5, X.5) only apply to high resolution
+// sources, so they are not offered here.
+const INTEGER_SCALING_UNDERSCALE = 0;
+const INTEGER_SCALING_OVERSCALE = 1;
+const INTEGER_SCALING_SMART = 2;
+
+const INTEGER_AXIS_Y = 0;
+const INTEGER_AXIS_Y_X = 1;
+const INTEGER_AXIS_X = 4;
 
 // Event Listeners
 resolutionSelect.addEventListener('change', () => {
@@ -230,6 +249,21 @@ aspectRatioBaseSelect.addEventListener('change', () => {
 });
 imagePositionSelect.addEventListener('change', updatePreview);
 
+// Image scaling mode event listeners
+imageScalingModeSelect.addEventListener('change', () => {
+    handleScalingModeChange();
+    updatePreview();
+});
+integerScaleAxisSelect.addEventListener('change', updatePreview);
+contentSourceWidthInput.addEventListener('input', () => {
+    updateContentSizeLabel();
+    updatePreview();
+});
+contentSourceHeightInput.addEventListener('input', () => {
+    updateContentSizeLabel();
+    updatePreview();
+});
+
 // Pixel Grid event listeners
 pixelGridSizeInput.addEventListener('input', () => {
     pixelGridSizeValue.textContent = formatValue(pixelGridSizeInput.value) + 'px';
@@ -304,6 +338,10 @@ function handleImageUpload(event) {
             const img = new Image();
             img.onload = function() {
                 previewImage = img;
+                // Default the integer-scaling content size to the image's own size.
+                contentSourceWidthInput.value = img.naturalWidth;
+                contentSourceHeightInput.value = img.naturalHeight;
+                updateContentSizeLabel();
                 clearImageBtn.style.display = 'inline-flex';
                 updatePreview();
             };
@@ -316,6 +354,9 @@ function handleImageUpload(event) {
 function clearPreviewImage() {
     previewImage = null;
     previewImageInput.value = '';
+    contentSourceWidthInput.value = '';
+    contentSourceHeightInput.value = '';
+    updateContentSizeLabel();
     clearImageBtn.style.display = 'none';
     updatePreview();
 }
@@ -361,23 +402,84 @@ function handleAspectRatioChange() {
         customAspectRatioDiv.classList.remove('active');
     }
 
-    // Show aspect ratio base selector only when aspect ratio is selected (not 'none')
-    if (aspectRatioValue !== 'none') {
+    // Show aspect ratio base selector only when a non-integer fit is used
+    if (aspectRatioValue !== 'none' && !isIntegerScaling()) {
         aspectRatioBaseGroup.style.display = 'block';
-        updateImagePositionOptions();
     } else {
         aspectRatioBaseGroup.style.display = 'none';
     }
+
+    updateImagePositionOptions();
+}
+
+// The integer scaling modes come from RetroArch's video scaling settings:
+//   Integer Scale Scaling -> Underscale / Overscale / Smart
+//   Integer Scale Axis    -> Y / Y + X / X
+function isIntegerScaling() {
+    return imageScalingModeSelect.value !== 'fit';
+}
+
+function getIntegerScalingMode() {
+    switch (imageScalingModeSelect.value) {
+        case 'integer-overscale':
+            return INTEGER_SCALING_OVERSCALE;
+        case 'integer-smart':
+            return INTEGER_SCALING_SMART;
+        case 'integer-underscale':
+            return INTEGER_SCALING_UNDERSCALE;
+        default:
+            return null;
+    }
+}
+
+function getIntegerScalingAxis() {
+    switch (integerScaleAxisSelect.value) {
+        case 'yx':
+            return INTEGER_AXIS_Y_X;
+        case 'x':
+            return INTEGER_AXIS_X;
+        default:
+            return INTEGER_AXIS_Y;
+    }
+}
+
+function handleScalingModeChange() {
+    const integer = isIntegerScaling();
+
+    integerAxisGroup.style.display = integer ? 'block' : 'none';
+    contentSizeGroup.style.display = integer ? 'block' : 'none';
+    canvas.classList.toggle('pixelated', integer);
+
+    // Integer scaling defines its own content geometry, so the fit-based
+    // aspect ratio base no longer applies.
+    if (!integer && imageAspectRatioSelect.value !== 'none') {
+        aspectRatioBaseGroup.style.display = 'block';
+    } else {
+        aspectRatioBaseGroup.style.display = 'none';
+    }
+
+    updateImagePositionOptions();
+    updateContentSizeLabel();
 }
 
 function updateImagePositionOptions() {
-    const base = aspectRatioBaseSelect.value;
     const currentValue = imagePositionSelect.value;
+    const base = aspectRatioBaseSelect.value;
 
     // Clear current options
     imagePositionSelect.innerHTML = '';
 
-    if (base === 'width') {
+    if (isIntegerScaling()) {
+        // Integer scaling can leave letterboxing on both axes, so every
+        // edge is a valid bias target.
+        imagePositionSelect.innerHTML = `
+            <option value="center">Center</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+        `;
+    } else if (base === 'width') {
         // Width-based: show vertical positions
         imagePositionSelect.innerHTML = `
             <option value="center">Center (Vertical)</option>
@@ -394,11 +496,38 @@ function updateImagePositionOptions() {
     }
 
     // Try to preserve selection if possible, otherwise default to center
-    if (currentValue === 'center' || imagePositionSelect.querySelector(`option[value="${currentValue}"]`)) {
+    if (imagePositionSelect.querySelector(`option[value="${currentValue}"]`)) {
         imagePositionSelect.value = currentValue;
     } else {
         imagePositionSelect.value = 'center';
     }
+}
+
+// The uploaded image can be a screenshot of an upscaled framebuffer, so the
+// native resolution of the emulated content is an explicit, optional input.
+function getContentSize() {
+    if (!previewImage) {
+        return null;
+    }
+
+    const width = parseInt(contentSourceWidthInput.value) || previewImage.naturalWidth;
+    const height = parseInt(contentSourceHeightInput.value) || previewImage.naturalHeight;
+
+    return { width, height };
+}
+
+function updateContentSizeLabel() {
+    if (!previewImage) {
+        contentSizeValue.textContent = 'no image';
+        return;
+    }
+
+    const size = getContentSize();
+    const isAuto = !parseInt(contentSourceWidthInput.value) && !parseInt(contentSourceHeightInput.value);
+
+    contentSizeValue.textContent = isAuto
+        ? `auto • ${size.width}×${size.height}`
+        : `${size.width}×${size.height}`;
 }
 
 function handleOverlayTypeChange() {
@@ -465,6 +594,296 @@ function getAspectRatio() {
     }
 }
 
+// Margin/letterbox bias for a position choice (RetroArch's viewport bias).
+function getPositionBias(position) {
+    switch (position) {
+        case 'top':
+            return { x: 0.5, y: 0 };
+        case 'bottom':
+            return { x: 0.5, y: 1 };
+        case 'left':
+            return { x: 0, y: 0.5 };
+        case 'right':
+            return { x: 1, y: 0.5 };
+        default:
+            return { x: 0.5, y: 0.5 };
+    }
+}
+
+// Port of RetroArch's video_viewport_get_scaled_integer() (gfx/video_driver.c)
+// for a non-rotated, y-down viewport.
+//
+// canvasWidth/canvasHeight : target display size
+// frameWidth/frameHeight   : native content size (core-reported geometry)
+// aspectRatio              : desired content aspect ratio (width / height)
+// scaling                  : INTEGER_SCALING_*
+// axis                     : INTEGER_AXIS_*
+// biasX/biasY              : 0..1 placement of the leftover margin
+//
+// Returns null when RetroArch would fall back to regular (non-integer)
+// scaling: no room for 1x, or a Smart mode rejection.
+function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeight,
+                                aspectRatio, scaling, axis, biasX, biasY) {
+    let width = canvasWidth;
+    let height = canvasHeight;
+    let x = 0;
+    let y = 0;
+    let paddingX = 0;
+    let paddingY = 0;
+    const halfW = 0; // half steps are not offered
+    const halfH = 0;
+
+    let contentWidth = 0;
+    let contentHeight = 0;
+    let maxScale = 1;
+    let maxScaleW = 1;
+    let maxScaleH = 1;
+
+    // Account for non-square pixels: the width comes from the aspect ratio.
+    contentHeight = frameHeight;
+    contentWidth = Math.round(contentHeight * aspectRatio);
+
+    if (contentWidth < 2 || contentHeight < 2) {
+        return null;
+    }
+
+    // Use regular scaling if there is no room for 1x.
+    if (contentWidth > width || contentHeight > height) {
+        return null;
+    }
+
+    contentWidth = Math.min(contentWidth, width);
+    contentHeight = Math.min(contentHeight, height);
+
+    if (scaling === INTEGER_SCALING_SMART) {
+        // Overscale if only overscan or a small number of rows get cropped.
+        // Otherwise underscale if the smallest margin doesn't exceed 12%.
+        // Otherwise fall back to non-integer scaling.
+        const underscaleW = Math.floor(width / contentWidth);
+        const underscaleH = Math.floor(height / contentHeight);
+
+        // Always check whether the next integer factor is a usable overscale,
+        // even when the underscale factor already fills the screen (e.g. 240p
+        // at 4k: x9 fills the height, but x10 only crops overscan).
+        const overscaleH = underscaleH + 1;
+        let smartScaleH = underscaleH;
+
+        // Minimum amount of content that must remain visible for overscale.
+        let overscaleMinHeight = contentHeight - 6;
+        if (contentHeight >= 192 && contentHeight <= 240) {
+            // 240p sources: 192 is the title safe area (80% of 240).
+            overscaleMinHeight = 192;
+        } else if (contentHeight >= 192 * 2 && contentHeight <= 480) {
+            // 480p sources use the 240p thresholds, doubled.
+            overscaleMinHeight = 192 * 2;
+        } else if (contentHeight > 240 && contentHeight <= 288) {
+            // Allow PAL to overscale without rotation.
+            overscaleMinHeight = 288 - 18;
+        } else if (contentHeight > 480 && contentHeight <= 576) {
+            overscaleMinHeight = 576 - 36;
+        }
+
+        if (Math.floor(height / overscaleH) >= overscaleMinHeight) {
+            smartScaleH = overscaleH;
+        }
+
+        maxScale = Math.min(underscaleW, smartScaleH);
+    } else if (scaling === INTEGER_SCALING_OVERSCALE) {
+        maxScale = Math.min(
+            Math.floor(width / contentWidth) + (width % contentWidth ? 1 : 0),
+            Math.floor(height / contentHeight) + (height % contentHeight ? 1 : 0)
+        );
+    } else {
+        maxScale = Math.min(
+            Math.floor(width / contentWidth),
+            Math.floor(height / contentHeight)
+        );
+    }
+
+    maxScaleW = maxScale;
+    maxScaleH = maxScale;
+
+    if (axis >= INTEGER_AXIS_Y_X) {
+        // Pick the nearest width multiplier that preserves the aspect ratio.
+        const targetRatio = contentWidth / contentHeight;
+        const heightThreshold = height * 1.12;
+        let underscaleRatio = 0;
+        let overscaleRatio = 0;
+        let i = 0;
+
+        // Reset the width to the frame's exact width: contentWidth has been
+        // replaced by the aspect-corrected width, and multiplying that would
+        // skip integer multiples of the real frame width.
+        contentWidth = frameWidth;
+
+        const overscaleW = Math.floor(width / contentWidth) + (width % contentWidth ? 1 : 0);
+
+        if (axis >= INTEGER_AXIS_X) {
+            contentHeight = Math.round(contentWidth / aspectRatio);
+            const overscaleH = Math.floor(height / contentHeight) + (height % contentHeight ? 1 : 0);
+
+            // Use regular scaling if there is no room for 1x.
+            if (contentWidth > width || contentHeight > height) {
+                return null;
+            }
+
+            if (scaling === INTEGER_SCALING_SMART) {
+                maxScaleH = (contentHeight * overscaleH > heightThreshold)
+                    ? overscaleH - 1
+                    : overscaleH;
+            } else if (scaling === INTEGER_SCALING_OVERSCALE) {
+                maxScaleH = overscaleH;
+            } else {
+                maxScaleH = overscaleH - 1;
+            }
+        }
+
+        // Populate the ratios.
+        for (i = 1; i < overscaleW + 1; i++) {
+            const scaleWRatio = (contentWidth * i) / (contentHeight * maxScaleH);
+
+            if (scaleWRatio > targetRatio) {
+                overscaleRatio = scaleWRatio;
+                break;
+            }
+            underscaleRatio = scaleWRatio;
+        }
+
+        // Pick the nearest ratio.
+        if (overscaleRatio > 0 && overscaleRatio - targetRatio <= targetRatio - underscaleRatio) {
+            maxScaleW = i;
+        } else if (i > 1) {
+            maxScaleW = i - 1;
+        }
+    }
+
+    paddingX = width - contentWidth * (maxScaleW + halfW * 0.5);
+    paddingY = height - contentHeight * (maxScaleH + halfH * 0.5);
+
+    if (scaling === INTEGER_SCALING_SMART) {
+        // Final check: are the underscaling margins too large? Past 12% of the
+        // display going unused, a plain non-integer scale looks better (e.g.
+        // 480p content on a 720p / 1080p display).
+        const widthUtilization = (width - paddingX) / width;
+        const heightUtilization = (height - paddingY) / height;
+
+        if (Math.max(widthUtilization, heightUtilization) < 0.88) {
+            return null;
+        }
+    }
+
+    // Use regular scaling if the overscale is unreasonable.
+    if (paddingX <= -frameWidth || paddingY <= -frameHeight) {
+        return null;
+    }
+
+    width -= paddingX;
+    height -= paddingY;
+    x += paddingX * biasX;
+    y += paddingY * biasY;
+
+    return {
+        x,
+        y,
+        width,
+        height,
+        scaleW: maxScaleW + halfW * 0.5,
+        scaleH: maxScaleH + halfH * 0.5,
+        paddingX,
+        paddingY,
+        utilization: Math.max((canvasWidth - paddingX) / canvasWidth,
+                              (canvasHeight - paddingY) / canvasHeight)
+    };
+}
+
+// Aspect-preserving "contain" fit, used both by the non-integer mode and as
+// RetroArch's regular-scaling fallback when integer scaling is impossible.
+function computeContainViewport(canvasWidth, canvasHeight, contentWidth, contentHeight, biasX, biasY) {
+    const scale = Math.min(canvasWidth / contentWidth, canvasHeight / contentHeight);
+    const width = contentWidth * scale;
+    const height = contentHeight * scale;
+
+    return {
+        x: (canvasWidth - width) * biasX,
+        y: (canvasHeight - height) * biasY,
+        width,
+        height
+    };
+}
+
+// Draws the preview image and returns a description of the scaling that was
+// applied, so the preview info bar can report it.
+function drawPreviewImage(context, image, resolution) {
+    const aspectRatio = getAspectRatio();
+    const base = aspectRatioBaseSelect.value;
+    const bias = getPositionBias(imagePositionSelect.value);
+    const scalingMode = getIntegerScalingMode();
+    let info = null;
+
+    if (scalingMode !== null) {
+        const content = getContentSize();
+        const contentAspect = aspectRatio === null
+            ? content.width / content.height
+            : aspectRatio;
+
+        // Integer scaling is pixel-perfect, so never let the canvas smooth it.
+        context.imageSmoothingEnabled = false;
+
+        const viewport = computeIntegerViewport(
+            resolution.width, resolution.height,
+            content.width, content.height,
+            contentAspect, scalingMode, getIntegerScalingAxis(),
+            bias.x, bias.y
+        );
+
+        if (viewport) {
+            context.drawImage(image, viewport.x, viewport.y, viewport.width, viewport.height);
+            info = { fallback: false, viewport };
+        } else {
+            // RetroArch falls back to regular, non-integer scaling.
+            const contentWidth = Math.round(content.height * contentAspect);
+            const fit = computeContainViewport(resolution.width, resolution.height,
+                contentWidth, content.height, bias.x, bias.y);
+            context.drawImage(image, fit.x, fit.y, fit.width, fit.height);
+            info = { fallback: true, viewport: null };
+        }
+
+        context.imageSmoothingEnabled = true;
+        return info;
+    }
+
+    context.imageSmoothingEnabled = true;
+
+    if (aspectRatio === null) {
+        // No aspect ratio constraint - scale to fill canvas
+        context.drawImage(image, 0, 0, resolution.width, resolution.height);
+        return info;
+    }
+
+    let drawWidth;
+    let drawHeight;
+    let drawX;
+    let drawY;
+
+    if (base === 'width') {
+        // Width-based: width = resolution width, calculate height
+        drawWidth = resolution.width;
+        drawHeight = drawWidth / aspectRatio;
+        drawX = 0;
+        drawY = (resolution.height - drawHeight) * bias.y;
+    } else {
+        // Height-based: height = resolution height, calculate width
+        drawHeight = resolution.height;
+        drawWidth = drawHeight * aspectRatio;
+        drawY = 0;
+        drawX = (resolution.width - drawWidth) * bias.x;
+    }
+
+    // Draw image with aspect ratio constraint
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    return info;
+}
+
 function updatePreview() {
     const resolution = getResolution();
     const overlayType = overlayTypeSelect.value;
@@ -477,50 +896,9 @@ function updatePreview() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw preview image if exists
+    let scalingInfo = null;
     if (previewImage) {
-        const aspectRatio = getAspectRatio();
-        const position = imagePositionSelect.value;
-        const base = aspectRatioBaseSelect.value;
-
-        if (aspectRatio === null) {
-            // No aspect ratio constraint - scale to fit canvas
-            ctx.drawImage(previewImage, 0, 0, resolution.width, resolution.height);
-        } else {
-            let drawWidth, drawHeight, drawX, drawY;
-
-            if (base === 'width') {
-                // Width-based: width = resolution width, calculate height
-                drawWidth = resolution.width;
-                drawHeight = drawWidth / aspectRatio;
-                drawX = 0;
-
-                // Calculate Y position based on selected position
-                if (position === 'top') {
-                    drawY = 0;
-                } else if (position === 'bottom') {
-                    drawY = resolution.height - drawHeight;
-                } else { // center
-                    drawY = (resolution.height - drawHeight) / 2;
-                }
-            } else {
-                // Height-based: height = resolution height, calculate width
-                drawHeight = resolution.height;
-                drawWidth = drawHeight * aspectRatio;
-                drawY = 0;
-
-                // Calculate X position based on selected position (horizontal positioning)
-                if (position === 'left') {
-                    drawX = 0;
-                } else if (position === 'right') {
-                    drawX = resolution.width - drawWidth;
-                } else { // center
-                    drawX = (resolution.width - drawWidth) / 2;
-                }
-            }
-
-            // Draw image with aspect ratio constraint
-            ctx.drawImage(previewImage, drawX, drawY, drawWidth, drawHeight);
-        }
+        scalingInfo = drawPreviewImage(ctx, previewImage, resolution);
     }
 
     // Draw overlay on top only if toggle is on
@@ -557,7 +935,7 @@ function updatePreview() {
         drawLogo(resolution);
     }
 
-    updatePreviewInfo(resolution, overlayType);
+    updatePreviewInfo(resolution, overlayType, scalingInfo);
 }
 
 function generateFrame(resolution) {
@@ -811,7 +1189,61 @@ function generateLCDGrid(resolution) {
     }
 }
 
-function updatePreviewInfo(resolution, overlayType) {
+function getScalingInfoText(scalingInfo) {
+    if (!previewImage) {
+        return '';
+    }
+
+    const mode = imageScalingModeSelect.value;
+    const modeLabels = {
+        'integer-underscale': 'Underscale',
+        'integer-overscale': 'Overscale',
+        'integer-smart': 'Smart'
+    };
+    const axisLabels = { y: 'Y', yx: 'Y + X', x: 'X' };
+
+    if (mode === 'fit') {
+        return 'Scaling: Fit (non-integer)';
+    }
+
+    const label = `Integer ${modeLabels[mode]} (${axisLabels[integerScaleAxisSelect.value]})`;
+
+    if (!scalingInfo || scalingInfo.fallback) {
+        // RetroArch drops back to regular scaling when no integer factor is usable.
+        return `${label} → Fit (fallback)`;
+    }
+
+    const viewport = scalingInfo.viewport;
+    const scale = viewport.scaleW === viewport.scaleH
+        ? `×${viewport.scaleW}`
+        : `×${viewport.scaleW}×${viewport.scaleH}`;
+
+    let text = `${label} ${scale}`;
+
+    const padX = Math.max(0, viewport.paddingX);
+    const padY = Math.max(0, viewport.paddingY);
+    const cropX = Math.max(0, -viewport.paddingX);
+    const cropY = Math.max(0, -viewport.paddingY);
+
+    if (padX > 0 && padY > 0 && !cropX && !cropY) {
+        text += ` • pad ${padX}×${padY}`;
+    } else {
+        const parts = [];
+        if (padX) parts.push(`pad X${padX}`);
+        if (padY) parts.push(`pad Y${padY}`);
+        if (cropX) parts.push(`crop X${cropX}`);
+        if (cropY) parts.push(`crop Y${cropY}`);
+        if (parts.length) {
+            text += ` • ${parts.join(' • ')}`;
+        }
+    }
+
+    text += ` • fill ${Math.round(viewport.utilization * 100)}%`;
+
+    return text;
+}
+
+function updatePreviewInfo(resolution, overlayType, scalingInfo) {
     let typeInfo = '';
 
     switch (overlayType) {
@@ -838,9 +1270,12 @@ function updatePreviewInfo(resolution, overlayType) {
             break;
     }
 
+    const scalingInfoText = getScalingInfoText(scalingInfo);
+
     previewInfo.innerHTML = `
         <span><strong>${resolution.width} × ${resolution.height}</strong></span>
         <span>${typeInfo}</span>
+        ${scalingInfoText ? `<span>${scalingInfoText}</span>` : ''}
     `;
 }
 
@@ -1124,6 +1559,7 @@ function generateLCDGridOnCanvas(context, resolution) {
 
 // Initialize
 handleOverlayTypeChange();
+handleScalingModeChange();
 handleAspectRatioChange();
 updateImagePositionOptions();
 updatePreview();
