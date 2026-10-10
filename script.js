@@ -15,6 +15,7 @@ const aspectRatioBaseGroup = document.getElementById('aspectRatioBaseGroup');
 const aspectRatioBaseSelect = document.getElementById('aspectRatioBase');
 const imagePositionSelect = document.getElementById('imagePosition');
 const imageScalingModeSelect = document.getElementById('imageScalingMode');
+const integerHint = document.getElementById('integerHint');
 const integerAxisGroup = document.getElementById('integerAxisGroup');
 const integerScaleAxisSelect = document.getElementById('integerScaleAxis');
 const contentSizeGroup = document.getElementById('contentSizeGroup');
@@ -131,6 +132,8 @@ const INTEGER_SCALING_SMART = 2;
 const INTEGER_AXIS_Y = 0;
 const INTEGER_AXIS_Y_X = 1;
 const INTEGER_AXIS_X = 4;
+
+const INTEGER_AXIS_LABELS = { y: 'Y', yx: 'Y + X', x: 'X' };
 
 // Event Listeners
 resolutionSelect.addEventListener('change', () => {
@@ -620,8 +623,13 @@ function getPositionBias(position) {
 // axis                     : INTEGER_AXIS_*
 // biasX/biasY              : 0..1 placement of the leftover margin
 //
-// Returns null when RetroArch would fall back to regular (non-integer)
-// scaling: no room for 1x, or a Smart mode rejection.
+// Returns a viewport when an integer factor is usable, otherwise a descriptor
+// so the UI can explain RetroArch's non-integer fallback instead of silently
+// doing nothing.
+function integerFallback(reason, detail) {
+    return { ok: false, reason, detail: detail || '' };
+}
+
 function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeight,
                                 aspectRatio, scaling, axis, biasX, biasY) {
     let width = canvasWidth;
@@ -644,12 +652,13 @@ function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeig
     contentWidth = Math.round(contentHeight * aspectRatio);
 
     if (contentWidth < 2 || contentHeight < 2) {
-        return null;
+        return integerFallback('too-small');
     }
 
     // Use regular scaling if there is no room for 1x.
     if (contentWidth > width || contentHeight > height) {
-        return null;
+        return integerFallback('no-room',
+            `content ${frameWidth}×${frameHeight} (×${Math.round(aspectRatio * 100) / 100} = ${contentWidth}×${contentHeight}) tidak muat di ${canvasWidth}×${canvasHeight}`);
     }
 
     contentWidth = Math.min(contentWidth, width);
@@ -724,7 +733,8 @@ function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeig
 
             // Use regular scaling if there is no room for 1x.
             if (contentWidth > width || contentHeight > height) {
-                return null;
+                return integerFallback('no-room',
+                    `content ${contentWidth}×${contentHeight} tidak muat di ${canvasWidth}×${canvasHeight}`);
             }
 
             if (scaling === INTEGER_SCALING_SMART) {
@@ -768,13 +778,15 @@ function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeig
         const heightUtilization = (height - paddingY) / height;
 
         if (Math.max(widthUtilization, heightUtilization) < 0.88) {
-            return null;
+            return integerFallback('smart-utilization',
+                `Smart nolak integer: layar cuma kepake ${Math.round(Math.max(widthUtilization, heightUtilization) * 100)}% (< 88%)`);
         }
     }
 
     // Use regular scaling if the overscale is unreasonable.
     if (paddingX <= -frameWidth || paddingY <= -frameHeight) {
-        return null;
+        return integerFallback('overscale-unreasonable',
+            `overscale bakal ngilangin > 1 frame (pad ${paddingX}×${paddingY})`);
     }
 
     width -= paddingX;
@@ -783,6 +795,7 @@ function computeIntegerViewport(canvasWidth, canvasHeight, frameWidth, frameHeig
     y += paddingY * biasY;
 
     return {
+        ok: true,
         x,
         y,
         width,
@@ -825,6 +838,11 @@ function drawPreviewImage(context, image, resolution) {
         const contentAspect = aspectRatio === null
             ? content.width / content.height
             : aspectRatio;
+        const contentWidth = Math.round(content.height * contentAspect);
+        // What a plain non-integer fit would have produced, so the preview can
+        // say whether the integer result actually differs from it.
+        const fitScale = Math.min(resolution.width / contentWidth,
+                                  resolution.height / content.height);
 
         // Integer scaling is pixel-perfect, so never let the canvas smooth it.
         context.imageSmoothingEnabled = false;
@@ -836,16 +854,24 @@ function drawPreviewImage(context, image, resolution) {
             bias.x, bias.y
         );
 
-        if (viewport) {
+        info = {
+            integer: true,
+            fitScale,
+            content: [content.width, content.height]
+        };
+
+        if (viewport.ok) {
             context.drawImage(image, viewport.x, viewport.y, viewport.width, viewport.height);
-            info = { fallback: false, viewport };
+            info.ok = true;
+            info.viewport = viewport;
         } else {
             // RetroArch falls back to regular, non-integer scaling.
-            const contentWidth = Math.round(content.height * contentAspect);
             const fit = computeContainViewport(resolution.width, resolution.height,
                 contentWidth, content.height, bias.x, bias.y);
             context.drawImage(image, fit.x, fit.y, fit.width, fit.height);
-            info = { fallback: true, viewport: null };
+            info.ok = false;
+            info.reason = viewport.reason;
+            info.detail = viewport.detail;
         }
 
         context.imageSmoothingEnabled = true;
@@ -934,6 +960,10 @@ function updatePreview() {
     if (logoImage && logoPositionSelect.value !== 'none') {
         drawLogo(resolution);
     }
+
+    const hintText = getIntegerHint(scalingInfo);
+    integerHint.textContent = hintText;
+    integerHint.style.display = hintText && isIntegerScaling() ? 'block' : 'none';
 
     updatePreviewInfo(resolution, overlayType, scalingInfo);
 }
@@ -1200,7 +1230,7 @@ function getScalingInfoText(scalingInfo) {
         'integer-overscale': 'Overscale',
         'integer-smart': 'Smart'
     };
-    const axisLabels = { y: 'Y', yx: 'Y + X', x: 'X' };
+    const axisLabels = INTEGER_AXIS_LABELS;
 
     if (mode === 'fit') {
         return 'Scaling: Fit (non-integer)';
@@ -1208,9 +1238,10 @@ function getScalingInfoText(scalingInfo) {
 
     const label = `Integer ${modeLabels[mode]} (${axisLabels[integerScaleAxisSelect.value]})`;
 
-    if (!scalingInfo || scalingInfo.fallback) {
+    if (!scalingInfo || !scalingInfo.ok) {
         // RetroArch drops back to regular scaling when no integer factor is usable.
-        return `${label} → Fit (fallback)`;
+        const why = scalingInfo && scalingInfo.detail ? ` • ${scalingInfo.detail}` : '';
+        return `${label} → Fit (fallback)${why}`;
     }
 
     const viewport = scalingInfo.viewport;
@@ -1240,7 +1271,61 @@ function getScalingInfoText(scalingInfo) {
 
     text += ` • fill ${Math.round(viewport.utilization * 100)}%`;
 
+    // How the integer result compares to a plain fit: when the fit scale is
+    // already a whole number, every integer mode lands on the same layout and
+    // the only difference is pixel sharpness.
+    if (typeof scalingInfo.fitScale === 'number') {
+        const fitScale = Math.round(scalingInfo.fitScale * 100) / 100;
+        const sameAxis = Math.abs(scalingInfo.fitScale - viewport.scaleH) < 0.005
+                      || Math.abs(scalingInfo.fitScale - viewport.scaleW) < 0.005;
+        text += sameAxis
+            ? ` • fit ×${fitScale} (layout sama, cuma lebih tajam)`
+            : ` • fit ×${fitScale}`;
+    }
+
     return text;
+}
+
+// Short explanation under the scaling controls: why nothing appears to change.
+function getIntegerHint(scalingInfo) {
+    if (!previewImage || !isIntegerScaling()) {
+        return '';
+    }
+
+    if (!scalingInfo) {
+        return '';
+    }
+
+    if (!scalingInfo.ok) {
+        if (scalingInfo.reason === 'no-room') {
+            return `Nggak ada kelipatan integer yang muat: ${scalingInfo.detail}. `
+                 + 'Isi Source Content Size dengan resolusi native game (mis. 320×240), bukan ukuran file gambarnya.';
+        }
+        if (scalingInfo.reason === 'smart-utilization') {
+            return `${scalingInfo.detail} → RetroArch balik ke scaling non-integer. `
+                 + 'Pilih Underscale kalau mau tetap paksa integer.';
+        }
+        if (scalingInfo.reason === 'overscale-unreasonable') {
+            return `Overscale ditolak: ${scalingInfo.detail}. Pilih Underscale atau Smart.`;
+        }
+        return '';
+    }
+
+    const viewport = scalingInfo.viewport;
+    const wholeNumberFit = Math.abs(scalingInfo.fitScale - viewport.scaleH) < 0.005
+                        || Math.abs(scalingInfo.fitScale - viewport.scaleW) < 0.005;
+
+    if (wholeNumberFit && viewport.scaleW === viewport.scaleH) {
+        return `Skala fit-nya udah pas ×${viewport.scaleW}, jadi Underscale / Smart / Overscale `
+             + 'memang menghasilkan layout yang sama. Efeknya cuma ketajaman piksel '
+             + '(nearest-neighbour). Coba resolusi canvas yang bikin fit-nya pecahan biar bedanya kelihatan.';
+    }
+
+    if (viewport.scaleW === viewport.scaleH) {
+        return '';
+    }
+
+    return `Axis ${INTEGER_AXIS_LABELS[integerScaleAxisSelect.value]}: lebar ×${viewport.scaleW}, tinggi ×${viewport.scaleH}.`;
 }
 
 function updatePreviewInfo(resolution, overlayType, scalingInfo) {
