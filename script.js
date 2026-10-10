@@ -498,6 +498,7 @@ function renderLogoList() {
     logoList.innerHTML = '';
     logoCount.textContent = logos.length === 1 ? '1 logo' : `${logos.length} logos`;
     logoHint.style.display = logos.length ? 'block' : 'none';
+    canvas.classList.toggle('has-logos', logos.length > 0);
 
     logos.forEach((logo) => {
         const item = document.createElement('div');

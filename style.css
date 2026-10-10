@@ -509,6 +509,12 @@ body {
     background-color: white;
 }
 
+/* With logos on the canvas it is a drag surface, so a touch drag must move the
+   logo instead of scrolling the page. Without logos, normal scrolling wins. */
+#previewCanvas.has-logos {
+    touch-action: none;
+}
+
 .preview-header-left {
     display: flex;
     align-items: center;
